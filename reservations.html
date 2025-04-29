@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Dashboard - Community Management System</title>
+        <link rel="stylesheet" href="../css/styles.css" />
+      </head>
+      <body>
+        <header class="header">
+          <div class="container">
+            <div class="header-content">
+              <a href="/" class="logo">Community Management System</a>
+              <nav class="nav">
+                <a href="/"                class="nav-link active">Dashboard</a>
+                <a href="/bills"           class="nav-link">Bills</a>
+                <a href="/maintenance"     class="nav-link">Maintenance</a>
+                <a href="/reservations"    class="nav-link">Reservations</a>
+                <a href="/events"          class="nav-link">Events</a>
+                <a href="/notifications"   class="nav-link">Notifications</a>
+                <button id="logoutBtn"     class="btn btn-secondary">Logout</button>
+              </nav>
+            </div>
+          </div>
+        </header>
+      
+    <main class="main">
+        <div class="container">
+            <h1 class="card-title">Reservations</h1>
+
+            <!-- Make Reservation -->
+            <div class="card mb-4">
+                <h3 class="card-title">Make Reservation</h3>
+                <form id="reservationForm">
+                    <div class="form-group">
+                        <label for="resourceType" class="form-label">Resource Type</label>
+                        <select id="resourceType" class="form-input" required>
+                            <option value="">Select Resource Type</option>
+                            <option value="parking">Parking</option>
+                            <option value="facility">Facility</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="reservationDate" class="form-label">Date</label>
+                        <input type="date" id="reservationDate" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="resourceDetails" class="form-label">Resource Details</label>
+                        <select id="resourceDetails" class="form-input" required>
+                            <option value="">Select Resource</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Make Reservation</button>
+                </form>
+            </div>
+
+            <!-- My Reservations -->
+            <div class="card">
+                <h3 class="card-title">My Reservations</h3>
+                <div id="myReservations">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="../js/app.js"></script>
+    <script>
+        // Load reservations data
+        async function loadReservationsData() {
+            try {
+                const reservations = await api.getMyReservations();
+                const reservationsDiv = document.getElementById('myReservations');
+                
+                if (reservations.length === 0) {
+                    reservationsDiv.innerHTML = '<p>No reservations found</p>';
+                } else {
+                    reservationsDiv.innerHTML = `
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Resource Type</th>
+                                    <th>Resource Details</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${reservations.map(reservation => `
+                                    <tr>
+                                        <td>${reservation.resource_type}</td>
+                                        <td>${reservation.resource_details}</td>
+                                        <td>${formatDate(reservation.reservation_date)}</td>
+                                        <td>
+                                            <span class="badge badge-${reservation.status === 'reserved' ? 'success' : 'warning'}">
+                                                ${reservation.status}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            ${reservation.status === 'reserved' ? `
+                                                <button class="btn btn-danger btn-sm" onclick="cancelReservation(${reservation.reservation_id})">
+                                                    Cancel
+                                                </button>
+                                            ` : ''}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                }
+            } catch (error) {
+                showAlert(error.message, 'error');
+            }
+        }
+
+        // Handle resource type change
+        document.getElementById('resourceType').addEventListener('change', async (e) => {
+            const resourceType = e.target.value;
+            const resourceDetails = document.getElementById('resourceDetails');
+            const date = document.getElementById('reservationDate').value;
+
+            if (resourceType && date) {
+                try {
+                    const spinner = showLoading();
+                    const response = await api.getAvailableResources(resourceType, date);
+                    resourceDetails.innerHTML = `
+                        <option value="">Select ${resourceType === 'parking' ? 'Parking Spot' : 'Facility'}</option>
+                        ${response.availableResources.map(resource => `
+                            <option value="${resource}">${resource}</option>
+                        `).join('')}
+                    `;
+                } catch (error) {
+                    showAlert(error.message, 'error');
+                } finally {
+                    hideLoading(spinner);
+                }
+            }
+        });
+
+        // Handle date change
+        document.getElementById('reservationDate').addEventListener('change', async (e) => {
+            const date = e.target.value;
+            const resourceType = document.getElementById('resourceType').value;
+
+            if (resourceType && date) {
+                try {
+                    const spinner = showLoading();
+                    const response = await api.getAvailableResources(resourceType, date);
+                    const resourceDetails = document.getElementById('resourceDetails');
+                    resourceDetails.innerHTML = `
+                        <option value="">Select ${resourceType === 'parking' ? 'Parking Spot' : 'Facility'}</option>
+                        ${response.availableResources.map(resource => `
+                            <option value="${resource}">${resource}</option>
+                        `).join('')}
+                    `;
+                } catch (error) {
+                    showAlert(error.message, 'error');
+                } finally {
+                    hideLoading(spinner);
+                }
+            }
+        });
+
+        // Handle reservation form submission
+        document.getElementById('reservationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const resourceType = document.getElementById('resourceType').value;
+            const resourceDetails = document.getElementById('resourceDetails').value;
+            const reservationDate = document.getElementById('reservationDate').value;
+
+            try {
+                const spinner = showLoading();
+                await api.makeReservation(resourceType, resourceDetails, reservationDate);
+                showAlert('Reservation made successfully');
+                document.getElementById('reservationForm').reset();
+                loadReservationsData(); // Refresh reservations data
+            } catch (error) {
+                showAlert(error.message, 'error');
+            } finally {
+                hideLoading(spinner);
+            }
+        });
+
+        // Cancel reservation
+        async function cancelReservation(reservationId) {
+            if (confirm('Are you sure you want to cancel this reservation?')) {
+                try {
+                    const spinner = showLoading();
+                    await api.cancelReservation(reservationId);
+                    showAlert('Reservation cancelled successfully');
+                    loadReservationsData(); // Refresh reservations data
+                } catch (error) {
+                    showAlert(error.message, 'error');
+                } finally {
+                    hideLoading(spinner);
+                }
+            }
+        }
+
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', loadReservationsData);
+    </script>
+</body>
+</html> 
